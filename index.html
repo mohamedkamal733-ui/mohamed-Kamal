@@ -445,12 +445,18 @@ async function assistantView(sel,msg){
   reset();setBg("app");$("#app")||0;
   if(!sel){
     app.innerHTML=assistantHead("اختار لاعب أو أضف لاعب جديد من بياناته")+`<div class="card"><h3>لاعب جديد</h3><div class="muted" style="margin-bottom:6px">الصق بياناته (الاسم، السن، الطول، الوزن، الهدف، أيام التمرين، واتساب) والبرنامج يوزعها:</div><textarea id="ant" placeholder="الاسم: .. السن: .. الطول: .. الوزن: .. الهدف: .. واتس: .."></textarea><button id="anb" style="margin-top:8px">⚡ إنشاء اللاعب</button><div class="err" id="ane">${msg||""}</div></div>
+    <div class="card"><h3>📥 استلام لاعب من الكوتش</h3><div class="muted" style="margin-bottom:6px;line-height:1.8">الصق النص اللي الكوتش بعته (مشفّر). هتحتاج كلمة السر اللي اتفقتوا عليها. ده هيستبدل نسخة اللاعب عندك لو موجودة.</div><textarea id="aimp" placeholder="الصق النص هنا"></textarea><button id="aimpb" style="margin-top:8px">استيراد اللاعب</button><div class="err" id="aimpe"></div></div>
     <div class="card"><h3>اللاعبين</h3><input id="aq" placeholder="بحث بالاسم..." style="margin-bottom:10px"><div id="al"></div></div>`;
     $("#aout").onclick=()=>loginView();
     const draw=()=>{const q=$("#aq").value.trim(),all=store.players.filter(x=>x.name.includes(q)).sort((a,b)=>b.updated-a.updated).slice(0,60);
       $("#al").innerHTML=all.map(x=>`<div class="pl" data-id="${x.id}"><b>${esc(x.name)}</b> <span class="muted">— ${x.mode==="bulk"?"Bulking":"Cutting"} · ${x.w} كجم</span><div class="muted">آخر تحديث: ${fmt(x.updated)}</div></div>`).join("")||'<div class="muted">لا يوجد</div>';
       document.querySelectorAll("#al .pl").forEach(el=>el.onclick=()=>assistantView(el.dataset.id))};
     $("#aq").oninput=draw;draw();
+    $("#aimpb").onclick=async()=>{const t=$("#aimp").value.trim();if(!t)return;
+      try{const o=await maybeDec(JSON.parse(t));const list=Array.isArray(o.players)?o.players:(o.id&&o.d?[o]:[]);if(!list.length)throw 0;
+        for(const pl of list){if(!pl||!pl.id||!pl.d)continue;pl.created=pl.created||Date.now();pl.updated=pl.updated||Date.now();pl.snaps=pl.snaps||[];await putPlayerRaw(pl);updateIdx(pl)}
+        assistantView(null,"✓ تم استيراد "+list.length+" لاعب")}
+      catch(e){$("#aimpe").textContent="النص مش صالح أو كلمة السر غلط"}};
     $("#anb").onclick=async()=>{const t=$("#ant").value.trim();if(!t)return;const R=parseNotes(t),miss=[];
       if(!R.f.name)miss.push("الاسم");if(!R.f.age)miss.push("السن");if(!R.f.height)miss.push("الطول");if(!R.f.weight)miss.push("الوزن");
       if(miss.length)return $("#ane").textContent="ناقص: "+miss.join("، ")+" — اكتبهم بالشكل (الاسم: .. السن: ..)";
@@ -465,11 +471,18 @@ async function assistantView(sel,msg){
    <textarea id="aup" placeholder="الوزن 84 ..."></textarea>
    <div class="grid" style="margin-top:8px"><label>واتساب اللاعب<input id="aph" type="tel" value="${esc(d.phone||"")}" placeholder="01001234567"></label>
    <label>نظام التمرين<select id="asp">${Object.keys(SPLITS).map(k=>`<option value="${k}" ${k===(d.tsplit||"kimo")?"selected":""}>${esc(SPLITS[k][0])}</option>`).join("")}</select></label></div>
-   <label style="margin-top:6px"><input type="checkbox" id="arg" style="width:auto" checked> إعادة حساب التغذية حسب البيانات الجديدة</label>
-   <button id="abuild" style="width:100%;margin-top:8px">⚡ جهّز البرنامج كامل (تغذية + تمرين + مكملات) وأنشئ PDF</button><div class="err" id="aerr"></div><div id="abox" class="card" style="display:none;margin-top:10px"></div></div>`;
+   <label style="margin-top:6px"><input type="checkbox" id="arg" style="width:auto"> إعادة حساب التغذية والتمرين من القالب (هيمسح الخطة الحالية)</label>
+   <div class="row" style="margin-top:8px;gap:8px"><button id="aprint" style="flex:1">🖨 اعمل الكتيب PDF من البرنامج الحالي</button></div>
+   <div class="muted" style="margin-top:6px;line-height:1.8">الزرار ده بيعمل PDF بالخطة اللي موجودة من غير ما يغيّر أي حاجة.</div>
+   <button id="abuild" class="sec" style="width:100%;margin-top:8px">⚡ تحديث البيانات وتجهيز البرنامج (بيعمل PDF)</button><div class="err" id="aerr"></div><div id="abox" class="card" style="display:none;margin-top:10px"></div></div>`;
   $("#aout").onclick=()=>loginView();$("#aback").onclick=()=>assistantView();
   $("#adel").onclick=async()=>{if(!confirm("حذف اللاعب «"+p.name+"» نهائيًا من الجهاز ده؟ مش هينفع يترجع."))return;if(!confirm("تأكيد أخير: حذف "+p.name+"؟"))return;
     try{delete pend[p.id];clearTimeout(tmr[p.id]);await delPlayerRaw(p.id);store.players=store.players.filter(x=>x.id!==p.id);if(store.cur===p.id){store.cur=null;putMeta("cur",null)}assistantView(null,"تم حذف "+p.name)}catch(e){alert("تعذر الحذف: "+e)}};
+  $("#aprint").onclick=async()=>{const err=$("#aerr"),box=$("#abox");err.textContent="";
+    try{ensurePlans(p.d);ensureDays(p.d);Object.assign(PV,{cover:true,info:true,notes:true,bn:true,bt:true,bs:true,kind:"book"});
+      box.style.display="block";box.textContent="جارٍ تجهيز الـ PDF...";await new Promise(r=>setTimeout(r,40));
+      const nm="كتيب-"+p.name+".pdf",{blob,n,urls}=await makePdf(p,"book");showPdfResult(box,blob,n,nm,p,"book",urls)}
+    catch(e){err.textContent="حصلت مشكلة: "+(e.message||e)}};
   $("#abuild").onclick=async()=>{const err=$("#aerr"),box=$("#abox");err.textContent="";
     try{const t=$("#aup").value.trim(),ph=normPhone($("#aph").value);
       if($("#aph").value.trim()&&ph.length<10)return err.textContent="رقم الواتساب غير صحيح";
@@ -507,6 +520,293 @@ function ensureDays(d){if(!d.days.length&&!d.daysFilled){d.days=mkDays(d.tsplit|
 function ensurePlans(d){
   (d.system==="cycle"?TYPES.filter(k=>d.week.includes(k)):["F"]).forEach(k=>{if(!d.filled[k]&&!d.plans[k].length)applyTpl(d,k);});
 }
+
+// ===== لصق البرنامج وتجهيزه: محلل بقواعد (من غير ذكاء اصطناعي خارجي) =====
+const PP_NUM=t=>String(t).replace(/[٠-٩]/g,c=>"٠١٢٣٤٥٦٧٨٩".indexOf(c)).replace(/[۰-۹]/g,c=>"۰۱۲۳۴۵۶۷۸۹".indexOf(c)).replace(/٫/g,".").replace(/،/g,",");
+const ppNorm=l=>PP_NUM(l).replace(/[ً-ٰٟـ]/g,"").replace(/[‎‏‪-‮️]/g,"").replace(/\s+/g," ").trim();
+const ppStrip=l=>ppNorm(l).replace(/^\s*(?:[-•*·▪●◦►>✔✅]+|\d{1,2}[.)](?=\s)|[a-zA-Z][.)](?=\s))\s*/,"").replace(/^[\p{Extended_Pictographic}]+\s*/u,"").trim();
+const PP_W=w=>new RegExp("^(?:"+w+")(?=$|[\\s:|\\-–—(،,])","i");
+const PP_DAYW="السبت|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الاربعاء|الخميس|الجمعة|saturday|sunday|monday|tuesday|wednesday|thursday|friday";
+const PP_SUPH=PP_W("المكملات|مكملات|supplements?|supps?");
+const PP_DAYH=PP_W("(?:يوم|اليوم|day)\\s*\\d+|"+PP_DAYW);
+const PP_MEALH=PP_W("(?:وجبة|الوجبة|meal)\\s*\\d+|الإفطار|الفطار|الغدا|الغداء|العشا|العشاء|السحور|سناك|snack|breakfast|lunch|dinner|pre[- ]?workout|post[- ]?workout|intra[- ]?workout|قبل التمرين|بعد التمرين|أثناء التمرين|اثناء التمرين|قبل النوم|بعد النوم|before (?:bed|sleep)");
+const PP_NOTEH=PP_W("ملاحظات|ملاحظة|notes?");
+function ppHeadKind(l){if(PP_SUPH.test(l))return"sups";if(PP_DAYH.test(l))return"day";if(PP_MEALH.test(l))return"meal";if(PP_NOTEH.test(l))return"notes";return null}
+const ppTok=s=>ppNorm(s).toLowerCase().replace(/[()\[\]{}.,:;/+|—–&]/g," ").replace(/-/g," ").split(" ").filter(w=>w.length>=2);
+// مطابقة اسم بقاعدة بيانات: تطابق تام (عربي أو إنجليزي) ثم تطابق كلمات. لو أكتر من نتيجة متساوية → null
+function ppMatch(name,list,key){const q=ppNorm(name).toLowerCase().replace(/\(.*?\)/g,"").trim();if(!q)return null;
+  const parts=x=>key(x).split(" — ").map(s=>ppNorm(s).toLowerCase().replace(/\(.*?\)/g,"").trim());
+  const exact=list.filter(x=>parts(x).includes(q));if(exact.length===1)return exact[0];if(exact.length>1)return {amb:true};
+  const qt=ppTok(q);if(!qt.length)return null;let best=[],bs=0;
+  list.forEach(x=>{const et=ppTok(key(x)),common=qt.filter(w=>et.includes(w)).length,sc=common/qt.length;
+    if(common<Math.min(2,qt.length)||sc<0.6)return;if(sc>bs){bs=sc;best=[x]}else if(sc===bs)best.push(x)});
+  return best.length===1?best[0]:(best.length>1?{amb:true}:null)}
+const PP_ALIAS=[["chicken breast","صدور دجاج"],["chicken","دجاج"],["rice","أرز أبيض"],["oats","شوفان"],["oatmeal","شوفان"],["egg whites","بياض بيض"],["egg","بيض كامل"],["eggs","بيض كامل"],["بيضة","بيض كامل"],["بيضات","بيض كامل"],["olive oil","زيت زيتون"],["salmon","سلمون"],["tuna","تونة"],["broccoli","بروكلي"],["spinach","سبانخ"],["sweet potato","بطاطا حلوة"],["potato","بطاطس"],["pasta","مكرونة"],["banana","موز"],["peanut butter","زبدة فول سوداني"],["almonds","لوز"],["cucumber","خيار"],["tomato","طماطم"],["carrot","جزر"],["beef","لحم بقري"],["turkey","ديك رومي"],["avocado","أفوكادو"],["chia","بذور شيا"],["tahini","طحينة"]];
+const ppFindFood=(n,foods)=>{const r=ppMatch(n,foods,f=>f.n);if(r)return r;const q=ppNorm(n).toLowerCase();const al=PP_ALIAS.find(([en])=>q.includes(en));if(!al)return null;const c=foods.filter(f=>ppNorm(f.n).includes(al[1]));return c.length===1?c[0]:(c.length>1?{amb:true}:null)};
+const ppFindEx=(n,exs)=>ppMatch(n,exs,e=>e.n);
+const ppFindSup=(n,sups)=>ppMatch(n,sups,s=>s.n);
+const PP_UNIT_G={"ملعقة":15,"ملاعق":15,"tbsp":15,"ملعقة كبيرة":15,"ملعقة صغيرة":5,"tsp":5};
+// تحليل سطر طعام: "200 جم أرز" / "2 بيضة" / "أرز أبيض 150 جرام" / "Chicken 150g"
+function ppFood(line,foods){const s=ppNorm(line);
+  const UNIT="جم|جرام|جرامات|g|gr|grams?|كجم|كيلو|kg|مل|ml|بيضة|بيضات|حبة|حبات|شريحة|شرائح|قطعة|قطع|عدد|ملعقة كبيرة|ملعقة صغيرة|ملعقة|ملاعق|tbsp|tsp|eggs?|slices?|pcs?|pieces?|كوب|cup";
+  let qty=null,unit="",name=s,qtxt="",m=s.match(new RegExp("^(\\d+(?:[.,]\\d+)?)\\s*(?:("+UNIT+")(?=\\s|$))?\\s*(?:من\\s+|of\\s+)?(.+)$","i"));
+  if(m){qty=parseFloat(m[1].replace(",","."));unit=(m[2]||"").toLowerCase();qtxt=m[1]+(unit?" "+unit:"");name=m[3].trim()}
+  else{m=s.match(new RegExp("^(.+?)\\s*[-–:،,]?\\s*(\\d+(?:[.,]\\d+)?)\\s*(?:("+UNIT+")(?=\\s|$))?\\s*$","i"));if(m){name=m[1].trim();qty=parseFloat(m[2].replace(",","."));unit=(m[3]||"").toLowerCase();qtxt=m[2]+(unit?" "+unit:"")}}
+  name=name.replace(/[-–:،,]+$/,"").trim();
+  const f=ppFindFood(name,foods);
+  if(!f)return {ok:false,why:"مش لاقي الصنف ده في قاعدة الأطعمة — اختاره من القايمة تحت",name,qtxt};if(f.amb)return {ok:false,why:"أكتر من صنف بيشبه الاسم — اكتب الاسم كامل",name};
+  let g;
+  if(qty===null)g=f.pc||100;
+  else if(/^(جم|جرام|جرامات|g|gr|grams?|مل|ml)$/.test(unit))g=qty;
+  else if(/^(كجم|كيلو|kg)$/.test(unit))g=qty*1000;
+  else if(PP_UNIT_G[unit]&&!f.pc)g=qty*PP_UNIT_G[unit];
+  else if(f.pc)g=qty*f.pc;
+  else return {ok:false,why:"الكمية محتاجة جرامات (مثلاً 150 جم)",name,qtxt};
+  return {ok:true,it:{n:f.n,g:Math.round(g*10)/10}}}
+
+// ----- تحليل الأيام والتمارين -----
+const PP_SETS=/(\d{1,2})\s*(?:sets?|سيت|سيتات|جولات|جولة)?\s*[×xX*]\s*(\d{1,2}(?:\s*[-–—]\s*\d{1,2})?(?:\s*(?:ثانية|ث|sec|s|دقيقة|دقايق|د|min|m))?(?:\s*(?:لكل رجل|لكل ذراع|each side))?)/i;
+const PP_REST=/(?:راحة|rest)\s*[:\-]?\s*(\d{1,3}(?:\s*[-–]\s*\d{1,3})?\s*(?:ثانية|ثانيه|ث|sec|s|دقيقة|دقايق|دقيقتين|د|min|m)?)/i;
+const PP_RIR=/(?:RIR|ريبس)\s*[:\-]?\s*(\d(?:\s*[-–]\s*\d)?)/i;
+const PP_DAYIDX={"السبت":0,"الأحد":1,"الاحد":1,"الاثنين":2,"الإثنين":2,"الثلاثاء":3,"الأربعاء":4,"الاربعاء":4,"الخميس":5,"الجمعة":6,"saturday":0,"sunday":1,"monday":2,"tuesday":3,"wednesday":4,"thursday":5,"friday":6};
+const PP_DUR=/^(.*?)\s*(\d+(?:\s*[-–]\s*\d+)?\s*(?:دقيقة|دقايق|دقائق|min|mins|minutes?|ثانية|sec|secs))(?=\s|$)\s*(.*)$/i;
+const PP_CARD=/^(cardio|كارديو)\s*[:：]\s*(.+)$/i;
+const PP_BLOCKKW=/^(cardio|كارديو|abs|البطن|بطن|warm[- ]?up|إحماء|mobility|حركية|core)(?=\s|$|[:：|(])/i;
+function ppDayTitle(s){const m=s.match(PP_W("(?:يوم|اليوم|day)\\s*\\d+|"+PP_DAYW));let t=m?s.slice(m[0].length):s;return t.replace(/^[\s:：|\-–—,(]+|[\s)]+$/g,"").trim()}
+function ppDayWd(s,n){const w=s.toLowerCase().match(new RegExp("("+PP_DAYW+")","i"));return w?PP_DAYIDX[w[1].toLowerCase()]??PP_DAYIDX[w[1]]??(n%7):(n%7)}
+function ppExLine(s,exs){
+  const m=s.match(PP_SETS);let name=s,sr="",after="";
+  if(m){name=s.slice(0,m.index);sr=(m[1]+" × "+m[2]).replace(/\s*[-–—]\s*/g,"–").replace(/\s+/g," ").trim();after=s.slice(m.index+m[0].length)}
+  else{const dm=s.match(PP_DUR);if(dm){name=dm[1];sr=dm[2];after=dm[3]}}
+  const rs=(after.match(PP_REST)||[])[1]||"",rr=(after.match(PP_RIR)||[])[1]||"";
+  const nt=after.replace(PP_REST,"").replace(PP_RIR,"").replace(/^[\s\-–—|:،,(]+|[\s)]+$/g,"").trim();
+  name=name.replace(/^[\s\-–—:|]+|[\s\-–—:|(،,]+$/g,"").trim();
+  return {name,sr,rs,rr,nt,ex:name?ppFindEx(name,exs):null,hasSets:!!m}}
+const ppIsBlockHead=s=>s.length<=45&&(/[:：]\s*$/.test(s)||/^[A-Z0-9][A-Z0-9 &+\/|\-–()]*$/.test(s)||/\|/.test(s)&&s.length<=45);
+const PP_WHEN=/(قبل|بعد|مع|أثناء|صباح|صبح|مساء|الصبح|النوم|الإفطار|الفطار|الغدا|العشا|التمرين|pre|post|morning|night|before|after|with)/i;
+function ppSupLine(s,ctx){
+  const segs=s.split(/\s[-–—]\s|\s?\(|\)/).map(x=>x.trim()).filter(Boolean);
+  const name=segs[0]||s;let dose="",when="";
+  segs.slice(1).forEach(x=>{if(PP_WHEN.test(x)&&!when)when=x;else dose=dose?dose+" · "+x:x});
+  const sp=ppFindSup(name,ctx.sups);
+  if(sp&&!sp.amb)return {n:sp.n,dose:dose||sp.d||"",when:when||sp.w||"",ok:1};
+  return {n:name,dose,when,unk:1,why:sp&&sp.amb?"أكتر من مكمل بيشبه الاسم — اكتب الاسم كامل":"مكمل مش موجود في قاعدة المكملات"}}
+// ----- المحلل الرئيسي -----
+function parseProgram(text,ctx){
+  const R={meals:[],sups:[],days:[],tw:[],tint:[],notes:[],unclear:[]};
+  let sec="none",day=null,block=null,meal=null;
+  const addUnclear=(l,why)=>R.unclear.push({l,why});
+  const newDay=(title)=>{const n=R.days.length;day={wd:ppDayWd(title,n),t:ppDayTitle(title)||("يوم "+(n+1)),blocks:[{h:null,items:[]}]};R.days.push(day);block=day.blocks[0];return day};
+  const newMeal=(title)=>{meal={t:title,w:"",items:[]};R.meals.push(meal);return meal};
+  const dayLine=(s)=>{
+    if(!day)newDay("تمرين");
+    const c=s.match(PP_CARD);if(c){block=day.blocks.find(b=>b.h==="الكارديو | CARDIO")||(()=>{const b={h:"الكارديو | CARDIO",items:[]};day.blocks.push(b);return b})();dayLine(c[2]);return}
+    if(PP_BLOCKKW.test(s)&&!/\d\s*[×xX*]\s*\d/.test(s)&&!ppFindEx(s,ctx.exs)&&s.length<=45){block={h:s.replace(/[:：]\s*$/,""),items:[]};day.blocks.push(block);return}
+    if(ppIsBlockHead(s)&&!/\d/.test(s)&&!ppFindEx(s,ctx.exs)){block={h:s.replace(/[:：]\s*$/,""),items:[]};day.blocks.push(block);return}
+    const e=ppExLine(s,ctx.exs);
+    if(!block){block={h:null,items:[]};day.blocks.push(block)}
+    if(!e.name){addUnclear(s,"سطر من غير اسم تمرين");return}
+    if(e.ex&&e.ex.amb){const why="أكتر من تمرين بيشبه الاسم — اكتب الاسم كامل";block.items.push({n:e.name,sr:e.sr,rs:e.rs,rr:e.rr,nt:e.nt,unk:1,why});addUnclear(s,why);return}
+    if(e.ex){block.items.push({n:e.ex.n,sr:e.sr,rs:e.rs,rr:e.rr,nt:e.nt});return}
+    if(e.hasSets){block.items.push({n:e.name,sr:e.sr,rs:e.rs,rr:e.rr,nt:e.nt,custom:1});addUnclear(s,"التمرين ده مش في قاعدة التمارين — هيتكتب بالاسم اللي كتبته");return}
+    const why="مش واضح: مفيش عدد سيتات ولا تمرين معروف";block.items.push({n:e.name,sr:"",nt:e.nt,unk:1,why});addUnclear(s,why);
+  };
+  const mealLine=(s)=>{
+    if(!meal)newMeal("الوجبة "+(R.meals.length+1));
+    const tl=s.match(/^(.+?)\s[-–—]\s(.+)$/);let base=s,tail="";if(tl&&PP_WHEN.test(tl[2])&&!/\d+\s*(جم|جرام|g)\b/i.test(tl[2])){base=tl[1];tail=tl[2]}
+    const parts=base.split(/\s*[،+]\s*|,\s+/).filter(Boolean);
+    if(parts.length>1){parts.forEach(pt=>{const o=ppFood(pt,ctx.foods);if(o.ok){meal.items.push(o.it);return}const sp=ppFindSup(o.name||pt,ctx.sups);if(sp&&!sp.amb){R.sups.push({n:sp.n,dose:o.qtxt||sp.d||"",when:tail||meal.t});return}const why=o.why||"مش واضح";meal.items.push({n:o.name||pt,g:0,txt:pt,unk:1,why});addUnclear(pt,why)});return}
+    const oks=[ppFood(base,ctx.foods)];
+    if(/^(قبل|بعد|أثناء|اثناء|وقت|توقيت)(?=\s|$)/.test(s)&&!/\d+\s*(جم|جرام|g)/i.test(s)){meal.w=meal.w?meal.w+" · "+s:s;return}
+    const f=oks[0];
+    if(f.ok){meal.items.push(f.it);return}
+    const sp=ppFindSup(f.name||base,ctx.sups);
+    if(sp&&!sp.amb){R.sups.push({n:sp.n,dose:f.qtxt||sp.d||"",when:tail||meal.t});return}
+    const why=f.why||"مش واضح";meal.items.push({n:f.name||base,g:0,txt:s,unk:1,why});addUnclear(s,why);
+  };
+  const lines=String(text||"").split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  for(const raw of lines){
+    if(/^[-=_*━⸻·]{3,}$/.test(ppNorm(raw)))continue;
+    const s=ppStrip(raw);if(!s)continue;
+    if(/^(weekly cardio|الكارديو الأسبوعي)$/i.test(s)){sec="tw";continue}
+    if(/^(intensity|الشدة)$/i.test(s)){sec="tint";continue}
+    const hk=ppHeadKind(s);
+    if(hk==="notes"){sec="notes";const rest=s.replace(PP_NOTEH,"").replace(/^[:：\s-]+/,"").trim();if(rest)R.notes.push(rest);continue}
+    if(hk==="sups"){sec="sups";const rest=s.replace(PP_SUPH,"").replace(/^[:：\s-]+/,"").trim();if(rest)R.sups.push(ppSupLine(rest,ctx));continue}
+    if(hk==="day"){sec="day";newDay(s);continue}
+    if(hk==="meal"&&meal&&/\d|دقيقة|ساعة/.test(s)&&!/^(الوجبة|وجبة|meal)\s*\d+\s*[—\-:]?/i.test(s)){meal.w=meal.w?meal.w+" · "+s:s;continue}
+    if(hk==="meal"){sec="meal";const ci=s.search(/[:：]/);if(ci>0&&ci<50){newMeal(s.slice(0,ci).trim());const rest=s.slice(ci+1).trim();if(rest)mealLine(rest)}else newMeal(s);continue}
+    if(sec==="notes"){R.notes.push(s);continue}
+    if(sec==="tw"){R.tw.push(s);continue}
+    if(sec==="tint"){R.tint.push(s);continue}
+    if(sec==="sups"){R.sups.push(ppSupLine(s,ctx));if(R.sups[R.sups.length-1].unk)addUnclear(s,R.sups[R.sups.length-1].why);continue}
+    if(sec==="day"||(sec==="none"&&PP_SETS.test(s))){sec="day";dayLine(s);continue}
+    sec="meal";mealLine(s);
+  }
+  return {v:1,at:Date.now(),meals:R.meals,sups:R.sups,days:R.days,tw:R.tw.join("\n"),tint:R.tint.join("\n"),notes:R.notes.join("\n"),unclear:R.unclear}
+}
+
+// ===== البرنامج الملصوق: حساب الأسطر المش واضحة + قايمة بيها =====
+function ppCountUnk(pp){let n=0;if(!pp)return 0;(pp.meals||[]).forEach(m=>m.items.forEach(i=>{if(i.unk)n++}));(pp.sups||[]).forEach(s=>{if(s.unk)n++});(pp.days||[]).forEach(x=>x.blocks.forEach(b=>b.items.forEach(i=>{if(i.unk)n++})));return n}
+function ppList(pp){const L=[];if(!pp)return L;
+  (pp.meals||[]).forEach((m,i)=>m.items.forEach((it,j)=>{if(it.unk)L.push({path:`meals.${i}.items.${j}`,label:it.txt||it.n,why:it.why||"مش واضح"})}));
+  (pp.sups||[]).forEach((s,i)=>{if(s.unk)L.push({path:`sups.${i}`,label:s.n,why:s.why||"مش واضح"})});
+  (pp.days||[]).forEach((x,i)=>x.blocks.forEach((b,bi)=>b.items.forEach((it,j)=>{if(it.unk)L.push({path:`days.${i}.blocks.${bi}.items.${j}`,label:it.n,why:it.why||"مش واضح"})})));
+  return L}
+// ===== جدول بصفوف ما بتتقسمش + هيدر بيتكرر في كل صفحة =====
+function ppRowH(D,cols,cells,fs){const lh=Math.round(fs*1.5),pad=13;let xr=PGW-MG;const xs=cols.map(cl=>{const w=TW*cl.w;const r=[xr-w,xr];xr-=w;return r});
+  let mx=1;cells.forEach((x,i)=>{const ob=typeof x==="object"&&x!==null?x:{t:x};setF(D.c,{s:fs,b:ob.b,ltr:ob.ltr});mx=Math.max(mx,wrapT(D.c,String(ob.t??""),xs[i][1]-xs[i][0]-pad*2).length)});
+  return mx*lh+pad*2}
+function ppTbl(D,cols,head,rows,fs){fs=fs||24;
+  if(head){D.need(ppRowH(D,cols,head,fs)+(rows[0]?ppRowH(D,cols,rows[0],fs):0));trow(D,cols,head,{hdr:1,s:fs})}
+  rows.forEach((r,i)=>{const h=ppRowH(D,cols,r,fs);if(head&&D.y+h>BOTY){D.np();trow(D,cols,head,{hdr:1,s:fs})}else D.need(h);trow(D,cols,r,{zeb:i%2===1,s:fs})});
+  D.y+=26}
+// ===== رسم صفحات البرنامج (نفس شكل الكتيب) =====
+async function makePagesPP(p){
+  const pp=p.d.pp||{},d=p.d,F={};allFoods().forEach(f=>F[f.n]=f);
+  const ph=(d.phase||"").split("—").map(x=>x.trim());
+  const D=mkDoc("PROGRAM",p.name,ph[0]||"برنامج");
+  const sumOf=items=>items.reduce((a,it)=>{const f=F[it.n];if(!f)return a;const q=(+it.g||0)/100;return {p:a.p+f.p*q,c:a.c+f.cb*q,f:a.f+f.f*q}},{p:0,c:0,f:0});
+  const kc=m=>Math.round(m.p*4+m.c*4+m.f*9);
+  const AM=x=>({t:x,col:CL.amb,b:1,ltr:1}),AMS=x=>({t:x,col:CL.amb,b:1,ltr:/[\u0600-\u06FF]/.test(x)?0:1}),ppLt=x=>(/[A-Za-z0-9]/.test(x)&&!/[\u0600-\u06FF]/.test(x))?"\u200E"+x:x;
+  const meals=(pp.meals||[]).map(m=>({...m,items:m.items.filter(i=>!i.unk)})).filter(m=>m.items.length||m.w);
+  const dayT={p:0,c:0,f:0};
+  if(meals.length){
+    if(D.y>TOPY+2)D.np();bar(D,"NUTRITION PLAN",ph[0]||"");
+    para(D,"الخطة الغذائية",{s:46,b:1,col:"#fff",lh:62});
+    meals.forEach((m,i)=>{const s=sumOf(m.items);dayT.p+=s.p;dayT.c+=s.c;dayT.f+=s.f;
+      const pills=m.items.length?[{t:kc(s)+" kcal",k:1},{t:"F "+Math.round(s.f)},{t:"C "+Math.round(s.c)},{t:"P "+Math.round(s.p)}]:[];
+      card(D,i+1,m.t,m.w||"",pills,m.items.map(it=>itemParts(it,F)),[])});
+    card(D,null,"الإجمالي اليومي","من الأصناف المعروفة فقط",[{t:kc(dayT)+" kcal",k:1},{t:"F "+Math.round(dayT.f)},{t:"C "+Math.round(dayT.c)},{t:"P "+Math.round(dayT.p)}],[],[]);
+  }
+  const sups=(pp.sups||[]).filter(s=>!s.unk);
+  if(sups.length){
+    const groups=[];sups.forEach(s=>{const w=s.when||"—";let g=groups.find(x=>x.w===w);if(!g){g={w,l:[]};groups.push(g)}g.l.push([s.n,ppLt(s.dose||"")])});
+    if(D.y>TOPY+2)D.np();bar(D,"SUPPLEMENTS","Timing Protocol");
+    para(D,"بروتوكول المكملات",{s:46,b:1,col:"#fff",lh:62,gap:10});
+    groups.forEach((g,i)=>card(D,i+1,g.w,"",[],g.l,[]));
+  }
+  const cols=[{w:.06,al:"center"},{w:.36},{w:.22,al:"center"},{w:.14,al:"center"},{w:.08,al:"center"},{w:.14}];
+  const colsC=[{w:.06,al:"center"},{w:.54},{w:.24,al:"center"},{w:.16}];
+  const days=(pp.days||[]).map((x,i)=>({...x,_i:i})).sort((a,b)=>(a.wd-b.wd)||(a._i-b._i));
+  days.forEach((day,i)=>{const w=WD[day.wd]||WD[0];
+    if(D.y>TOPY+2)D.np();bar(D,`DAY ${i+1} — ${w[1]}`,String(day.t||"").split("|").pop().trim());
+    para(D,`${w[2]} ${w[0]} — ${w[1]}`,{s:46,b:1,col:"#fff",lh:62});
+    if(day.t)para(D,day.t,{s:24,col:CL.amb,lh:38,gap:14,ltr:1,al:"right"});
+    let cnt=0;
+    day.blocks.forEach(b=>{const items=b.items.filter(x=>!x.unk);if(!items.length)return;
+      if(/CARDIO|كارديو/i.test(b.h||"")){ppTbl(D,colsC,["","الكارديو | CARDIO","المدة","ملاحظة"],items.map(x=>{cnt++;return [{t:String(cnt),col:CL.amb,b:1},{t:x.n,ltr:1},AMS(x.sr||"—"),x.nt||""]}))}
+      else ppTbl(D,cols,["",b.h||"WORKING SETS","SETS × REPS","REST","RIR","NOTES"],items.map(x=>{cnt++;return [{t:String(cnt),col:CL.amb,b:1},{t:x.n,ltr:1},AMS(x.sr||"—"),x.rs||"—",{t:x.rr||"—",ltr:1},x.nt||""]}))});
+  });
+  const hasTxt=v=>!!(v&&String(v).trim());
+  if(hasTxt(pp.tw)||hasTxt(pp.tint)||hasTxt(pp.notes)){
+    if(D.y>TOPY+2)D.np();bar(D,"CARDIO & NOTES","Weekly Notes");
+    para(D,"الكارديو والشدة والملاحظات",{s:46,b:1,col:"#fff",lh:62,gap:10});
+    if(hasTxt(pp.tw))box(D,"📌 WEEKLY CARDIO",pp.tw);
+    if(hasTxt(pp.tint))box(D,"📌 INTENSITY",pp.tint);
+    if(hasTxt(pp.notes))box(D,"📝 ملاحظات",pp.notes);
+  }
+  D.title="";D.sub="";D.np();para(D,"STAY CONSISTENT.",{s:78,b:1,col:"#fff",al:"center",ltr:1,lh:100,x0:MG,x1:PGW-MG});D.y=PGH/2-20;
+  para(D,"TRUST THE PROCESS.",{s:78,b:1,col:CL.amb,al:"center",ltr:1,lh:100});para(D,"COACH MOHAMED KAMAL — KIMO",{s:26,col:CL.mu,al:"center",ltr:1,lh:60});
+  const pages=[];
+  if(PV.cover){const img=await loadImg(store.cover||COVER),cv=document.createElement("canvas");cv.width=PGW;cv.height=PGH;const x=cv.getContext("2d");x.fillStyle=CL.bg;x.fillRect(0,0,PGW,PGH);
+    const k=Math.max(PGW/img.width,PGH/img.height),w=img.width*k,h=img.height*k;x.drawImage(img,(PGW-w)/2,(PGH-h)/2,w,h);pages.push(cv)}
+  const off=pages.length;pages.push(...D.pages);const total=pages.length;D.pages.forEach((cv,i)=>footer(cv,off+i+1,total));return pages}
+async function makePdfPP(p){const pages=await makePagesPP(p);const urls=pages.map(cv=>cv.toDataURL("image/jpeg",.85));
+  return {blob:buildPdf(urls.map(u=>({data:b64bytes(u),w:PGW,h:PGH}))),n:pages.length,urls}}
+// ===== نص للواتساب =====
+function ppText(p){const pp=p.d.pp||{},F={},L=[];allFoods().forEach(f=>F[f.n]=f);
+  (pp.meals||[]).forEach(m=>{const its=m.items.filter(i=>!i.unk);if(!its.length&&!m.w)return;L.push("━━ "+m.t+(m.w?" ("+m.w+")":""));its.forEach(i=>L.push("* "+itemLine(i,F)));L.push("")});
+  (pp.days||[]).slice().sort((a,b)=>a.wd-b.wd).forEach(day=>{const w=WD[day.wd]||WD[0];L.push("━━ "+w[2]+" "+w[0]+" — "+w[1]+(day.t?" · "+day.t:""));
+    day.blocks.forEach(b=>{const its=b.items.filter(i=>!i.unk);if(!its.length)return;if(b.h)L.push(b.h);its.forEach(x=>L.push("* "+x.n+(x.sr?" — "+x.sr:"")+(x.rs?" · راحة "+x.rs:"")+(x.nt?" · "+x.nt:"")))});L.push("")});
+  const ss=(pp.sups||[]).filter(s=>!s.unk);
+  if(ss.length){L.push("━━ المكملات");ss.forEach(s=>L.push("* "+s.n+(s.dose?" — "+s.dose:"")+(s.when?" ("+s.when+")":"")));L.push("")}
+  return L.join("\n").replace(/\n{3,}/g,"\n\n").trim()}
+
+// ===== واجهة «لصق البرنامج وتجهيزه» داخل صفحة اللاعب =====
+let ppMsg="";
+const ppFoodSel=(path,cur)=>`<select data-pp="${path}.n" style="flex:2"><option value="">— اختار صنف من القاعدة —</option>${Object.keys(FCAT).map(c=>`<optgroup label="${FCAT[c]}">${allFoods().filter(f=>f.c===c).map(f=>`<option ${f.n===cur?"selected":""}>${esc(f.n)}</option>`).join("")}</optgroup>`).join("")}</select>`;
+const ppExSel=(path,cur)=>allEx().some(e=>e.n===cur)?`<select data-pp="${path}.n" style="flex:2">${EGRP.map(g=>`<optgroup label="${g}">${allEx().filter(e=>e.g===g).map(e=>`<option ${e.n===cur?"selected":""}>${esc(e.n)}</option>`).join("")}</optgroup>`).join("")}</select>`:`<input data-pp="${path}.n" value="${esc(cur||"")}" style="flex:2" placeholder="اسم التمرين">`;
+function ppEditorHTML(p){
+  const pp=p.d.pp;
+  const paste=`<div class="card"><h3>📥 لصق البرنامج وتجهيزه <span class="hs">Paste &amp; Prepare</span></h3>
+   <div class="muted" style="line-height:1.9;margin-bottom:8px">الصق البرنامج زي ما هو: الوجبات بالجرام، أو الأيام والتمارين بالسيتات (مثلاً 4 × 8–10)، والمكملات، والملاحظات. التحليل بيتم بقواعد ثابتة جوه البرنامج، من غير أي خدمة ذكاء اصطناعي خارجية ومن غير أي مفتاح. أي سطر مش واضح بيتعلّم عليه عشان تصححه قبل الـ PDF.</div>
+   <textarea id="ppin" data-live="ppraw" data-mirror="ppmir" style="min-height:180px" placeholder="مثال:&#10;الوجبة 1 — الإفطار&#10;80 جم شوفان&#10;2 بيض كامل&#10;&#10;Day 1 - Chest + Triceps&#10;Incline Smith Press 4 × 6-10 راحة 2 دقيقة">${esc(p.d.ppraw||"")}</textarea><div id="ppmir" style="display:none"></div>
+   <div class="row" style="justify-content:flex-start;margin-top:8px;gap:8px"><button data-do="ppparse">⚡ تحليل وتجهيز</button>${pp?'<button class="sec" data-do="ppclr">🗑 مسح المسودة</button>':""}</div>
+   ${ppMsg?`<div class="muted" style="margin-top:8px;line-height:1.8;color:#25d366">${esc(ppMsg)}</div>`:""}</div>`;
+  if(!pp)return paste;
+  const unk=ppList(pp),DAYI=WD.map((x,k)=>k);
+  const unkCard=unk.length?`<div class="card" style="border-color:#b45309"><h3 style="color:#fbbf24">⚠ أسطر محتاجة مراجعة (${unk.length})</h3><div class="muted" style="line-height:1.8">اختار الصنف أو التمرين الصح من القايمة تحت (الخانات المحمرّة)، أو امسح السطر. الأسطر دي مش هتتطبع في الـ PDF لحد ما تتصلح.</div>${unk.map(u=>`<div class="muted" style="margin-top:6px">• ${esc(u.label)} — <span style="color:#fbbf24">${esc(u.why)}</span></div>`).join("")}</div>`:"";
+  const meals=`<div class="card"><h3>🍽 الوجبات والأصناف</h3>
+   ${pp.meals.map((m,i)=>`<div class="meal"><div class="row"><input data-pp="meals.${i}.t" value="${esc(m.t)}" style="flex:1"><button class="sec" data-do="ppdel" data-path="meals.${i}">حذف الوجبة</button></div>
+    <input data-pp="meals.${i}.w" value="${esc(m.w||"")}" placeholder="ملاحظة الوقت (اختياري)" style="margin:6px 0">
+    ${m.items.map((it,j)=>{const P=`meals.${i}.items.${j}`;return `<div class="row" style="margin:5px 0;flex-wrap:nowrap;${it.unk?"background:#2a1604;border-radius:10px;padding:6px":""}">${ppFoodSel(P,it.n)}<input data-pp="${P}.g" data-num="1" type="number" value="${it.g||""}" style="width:90px" placeholder="جم"><button class="sec" data-do="ppdel" data-path="${P}">✕</button></div>${it.unk?`<div class="muted" style="color:#fbbf24;margin:-2px 0 6px">⚠ ${esc(it.txt||it.n)} — ${esc(it.why||"")}</div>`:""}`}).join("")}
+    <select data-ppadd="meals.${i}.items" style="margin-top:6px"><option value="">＋ صنف من القاعدة</option>${Object.keys(FCAT).map(c=>`<optgroup label="${FCAT[c]}">${allFoods().filter(f=>f.c===c).map(f=>`<option>${esc(f.n)}</option>`).join("")}</optgroup>`).join("")}</select></div>`).join("")||'<div class="muted">مفيش وجبات</div>'}
+   <button class="sec" data-do="ppaddmeal" style="margin-top:6px">＋ وجبة</button></div>`;
+  const days=`<div class="card"><h3>🏋️ أيام التمرين</h3>
+   ${pp.days.map((day,i)=>`<div class="card" style="margin-bottom:10px"><div class="row"><select data-pp="days.${i}.wd" data-num="1" style="width:auto">${DAYI.map(k=>`<option value="${k}" ${day.wd===k?"selected":""}>${WD[k][2]} ${WD[k][0]}</option>`).join("")}</select><input data-pp="days.${i}.t" value="${esc(day.t||"")}" style="flex:1"><button class="sec" data-do="ppdel" data-path="days.${i}">حذف اليوم</button></div>
+    ${day.blocks.map((b,bi)=>`<div class="meal"><div class="row"><input data-pp="days.${i}.blocks.${bi}.h" value="${esc(b.h||"")}" placeholder="عنوان القسم (اختياري)" style="flex:1"><button class="sec" data-do="ppdel" data-path="days.${i}.blocks.${bi}">حذف القسم</button></div>
+      ${b.items.map((e,j)=>{const P=`days.${i}.blocks.${bi}.items.${j}`;return `<div class="row" style="margin:5px 0;flex-wrap:wrap;${e.unk?"background:#2a1604;border-radius:10px;padding:6px":""}">${ppExSel(P,e.n)}<input data-pp="${P}.sr" value="${esc(e.sr||"")}" placeholder="4 × 8–10" style="width:110px"><input data-pp="${P}.rs" value="${esc(e.rs||"")}" placeholder="راحة" style="width:100px"><input data-pp="${P}.rr" value="${esc(e.rr||"")}" placeholder="RIR" style="width:70px"><input data-pp="${P}.nt" value="${esc(e.nt||"")}" placeholder="ملاحظة" style="flex:1;min-width:120px"><button class="sec" data-do="ppdel" data-path="${P}">✕</button></div>${e.unk?`<div class="muted" style="color:#fbbf24;margin:-2px 0 6px">⚠ ${esc(e.why||"")}</div>`:""}`}).join("")}
+      <select data-ppadd="days.${i}.blocks.${bi}.items" style="margin-top:6px"><option value="">＋ تمرين من القاعدة</option>${EGRP.map(g=>`<optgroup label="${g}">${allEx().filter(e=>e.g===g).map(e=>`<option>${esc(e.n)}</option>`).join("")}</optgroup>`).join("")}</select></div>`).join("")}
+    </div>`).join("")||'<div class="muted">مفيش أيام تمرين</div>'}</div>`;
+  const sups=`<div class="card"><h3>💊 المكملات</h3>
+   ${pp.sups.map((s,i)=>`<div class="row" style="margin:5px 0;flex-wrap:nowrap;${s.unk?"background:#2a1604;border-radius:10px;padding:6px":""}"><input data-pp="sups.${i}.n" value="${esc(s.n)}" style="flex:2"><input data-pp="sups.${i}.dose" value="${esc(s.dose||"")}" style="flex:2" placeholder="الجرعة"><input data-pp="sups.${i}.when" value="${esc(s.when||"")}" style="flex:2" placeholder="التوقيت"><button class="sec" data-do="ppdel" data-path="sups.${i}">✕</button></div>${s.unk?`<div class="muted" style="color:#fbbf24;margin:-2px 0 6px">⚠ ${esc(s.why||"")}</div>`:""}`).join("")||'<div class="muted">مفيش مكملات</div>'}
+   <select data-ppadd="sups" style="margin-top:8px"><option value="">＋ مكمل من القاعدة</option>${[...new Set(allSup().map(s=>s.c))].map(c=>`<optgroup label="${esc(c)}">${allSup().filter(s=>s.c===c).map(s=>`<option>${esc(s.n)}</option>`).join("")}</optgroup>`).join("")}</select></div>`;
+  const texts=`<div class="card"><h3>📝 الكارديو والشدة والملاحظات</h3>
+   <label>WEEKLY CARDIO<textarea data-pp="tw" style="min-height:70px">${esc(pp.tw||"")}</textarea></label>
+   <label>INTENSITY<textarea data-pp="tint" style="min-height:70px">${esc(pp.tint||"")}</textarea></label>
+   <label>ملاحظات<textarea data-pp="notes" style="min-height:70px">${esc(pp.notes||"")}</textarea></label></div>`;
+  const act=`<div class="card"><h3>📄 تجهيز الملف</h3>
+   <div class="muted" style="line-height:1.9">الـ PDF بيطلع بنفس شكل الكتيب. «تطبيق على خطة اللاعب» بيحط البرنامج ده في الخطة الأساسية للاعب، وبيحفظ نسخة من القديم قبلها تقدر ترجعلها من «البرامج المطبوعة».</div>
+   <div class="row" style="justify-content:flex-start;margin-top:10px;gap:8px"><button data-do="pppdf">📄 إنشاء PDF</button><button class="sec" data-do="ppapply">✅ تطبيق على خطة اللاعب</button></div>
+   ${ppMsg?`<div class="muted" style="margin-top:8px;color:#25d366">${esc(ppMsg)}</div>`:""}
+   <div class="err" id="ppe"></div><div id="ppbox" class="card" style="display:none;margin-top:10px"></div></div>`;
+  return paste+unkCard+meals+days+sups+texts+act}
+// تعديل الخانات: بيحدّث d.pp بالمسار، ولو اتغيّر الصنف/التمرين بيشيل علامة «مش واضح»
+function ppChange(el,d){const pp=d.pp;if(!pp)return;
+  if(el.dataset.ppadd){const v=el.value;if(!v)return;const path=el.dataset.ppadd,arr=getP(pp,path);
+    if(path.startsWith("meals")){const nf=allFoods().find(f=>f.n===v);arr.push({n:v,g:nf&&nf.pc?nf.pc:100})}
+    else if(path==="sups"){const s=allSup().find(x=>x.n===v);arr.push({n:v,dose:s?s.d:"",when:s?s.w:""})}
+    else arr.push({n:v,sr:"3 × 10",rs:"",rr:"",nt:""});
+    return}
+  const path=el.dataset.pp;let v=el.value;if(el.dataset.num)v=v===""?"":+v;
+  setP(pp,path,v);
+  if(/\.n$/.test(path)){const o=getP(pp,path.replace(/\.n$/,""));delete o.unk;delete o.why;delete o.txt;
+    if(path.startsWith("meals")){const nf=allFoods().find(f=>f.n===v);if(nf&&!o.g)o.g=nf.pc||100}}}
+// أوامر الأزرار اللي بتغيّر البيانات (التحليل، المسح، إضافة وجبة، حذف عنصر)
+function ppAction(a,D,p,d){const pp=d.pp;
+  if(a==="ppparse"){const src=($("#ppin").value||"").trim();if(!src){ppMsg="الصق البرنامج في الخانة الأولى الأول";return}
+    const R=parseProgram(src,{foods:allFoods(),exs:allEx(),sups:allSup()});
+    const n=R.meals.length,dd=R.days.length,s=R.sups.length,u=ppCountUnk(R);
+    if(!n&&!dd&&!s&&!R.notes&&!R.tw&&!R.tint){ppMsg="ما اتعرفش على برنامج في النص ده — اكتب الوجبات بالجرام، أو التمارين بالسيتات (4 × 10)";return}
+    R.src=src;d.pp=R;ppMsg="✓ اتحلّل البرنامج: "+n+" وجبة · "+dd+" يوم تمرين · "+s+" مكمل"+(u?" · "+u+" سطر محتاج مراجعة":" · كله واضح");return}
+  if(!pp)return;
+  if(a==="ppclr"){if(!confirm("مسح المسودة دي؟ البرنامج الأساسي للاعب مش هيتغيّر."))return;delete d.pp;delete d.ppraw;ppMsg="";return}
+  if(a==="ppdel"){const path=D.path,base=path.replace(/\.\d+$/,""),idx=+path.match(/(\d+)$/)[1];getP(pp,base).splice(idx,1);return}
+  if(a==="ppaddmeal"){pp.meals.push({t:"وجبة "+(pp.meals.length+1),w:"",items:[]});return}
+  if(a==="ppapply"){ppApply(p,d);return}
+}
+async function ppMakePdf(p){const box=$("#ppbox"),err=$("#ppe");err.textContent="";
+  if(!p.d.pp){err.textContent="حلّل البرنامج الأول";return}
+  const u=ppCountUnk(p.d.pp);box.style.display="block";box.textContent="جارٍ تجهيز الـ PDF...";
+  try{await new Promise(r=>setTimeout(r,40));const nm="برنامج-"+p.name+".pdf";const {blob,n,urls}=await makePdfPP(p);
+    showPdfResult(box,blob,n,nm,p,"pp",urls);
+    if(u)box.insertAdjacentHTML("afterbegin",`<div class="err" style="margin-bottom:8px">فيه ${u} سطر لسه مش واضح — ده مش هيتطبع. صححه من الخانات تحت وبعدين اعمل الـ PDF تاني لو عايزه يتطبع.</div>`)}
+  catch(e){err.textContent="حصلت مشكلة: "+(e.message||e)}}
+function ppApply(p,d){const pp=d.pp;if(!pp)return;const F={};allFoods().forEach(f=>F[f.n]=f);
+  const meals=(pp.meals||[]).map(m=>({t:m.t,w:m.w||"",items:m.items.filter(i=>!i.unk&&F[i.n]).map(i=>({n:i.n,g:+i.g||0}))})).filter(m=>m.items.length||m.w);
+  const days=(pp.days||[]).map(x=>({wd:x.wd,t:x.t,blocks:x.blocks.map(b=>({h:b.h,items:b.items.filter(i=>!i.unk&&i.n).map(i=>({n:i.n,sr:i.sr||"",nt:i.nt||"",rs:i.rs||"",rr:i.rr||""}))})).filter(b=>b.items.length||b.h)})).filter(x=>x.blocks.length);
+  const sups=(pp.sups||[]).filter(s=>!s.unk&&s.n).map(s=>({n:s.n,dose:s.dose||"",when:s.when||""}));
+  const unk=ppCountUnk(pp),keys=d.system==="cycle"?TYPES.filter(k=>d.week.includes(k)):["F"];
+  if(!meals.length&&!days.length&&!sups.length){ppMsg="مفيش حاجة واضحة تتطبق. صحّح الأسطر المحمرّة الأول";return}
+  if(!confirm("هيتطبق البرنامج ده على خطة اللاعب"+(unk?" (الأسطر المش واضحة هتتجاهل)":"")+". نسخة من القديم هتتحفظ في «البرامج المطبوعة». متأكد؟"))return;
+  snapshot(p,"paste");
+  if(meals.length)keys.forEach(k=>{d.plans[k]=clone(meals);d.filled[k]=1});
+  if(days.length){d.days=days;d.daysFilled=1}
+  if(sups.length)d.sups=sups;
+  if(pp.tw&&pp.tw.trim())d.tw=pp.tw;if(pp.tint&&pp.tint.trim())d.tint=pp.tint;if(pp.notes&&pp.notes.trim())d.notes=pp.notes;
+  d.log=d.log||[];d.log.push({t:Date.now(),by:store.who||"الكوتش",k:"paste"});if(d.log.length>30)d.log.shift();
+  ppMsg="✓ اتطبق البرنامج على خطة اللاعب"+(unk?" (اتجاهل "+unk+" سطر مش واضح)":"")}
 
 // ===== الشاشات =====
 let tab=0;
@@ -682,7 +982,7 @@ function playerView(p){
      <div class="card"><h3>ملف اللاعب</h3><div class="muted">أُنشئ: ${fmt(p.created)} · آخر تحديث للبيانات: ${fmt(p.updated)}</div>
       <div class="muted">آخر برنامج: ${esc(d.phase)} · ${esc((SPLITS[d.tsplit]||[""])[0])} · ${d.system==="cycle"?"Carb Cycle":"نظام ثابت"} · ${d.mode==="bulk"?"Bulking":"Cutting"}</div>
       <div class="muted" style="margin-top:6px">سجل الوزن: ${(d.hist||[]).slice(-6).map(x=>x.w+" كجم ("+fmt(x.t)+")").join(" ← ")||"—"}</div>
-      ${(p.snaps||[]).length?`<h3 style="margin-top:12px">البرامج المطبوعة (آخر ${p.snaps.length})</h3>`+p.snaps.map((x,i)=>`<div class="row" style="margin:5px 0"><span class="muted">${fmt(x.t)} · ${({diet:"تغذية",train:"تمرين",sups:"مكملات",book:"كتيب"})[x.kind]||x.kind} · ${esc(x.phase||"")} · ${x.weight} كجم</span><button class="sec" data-do="restore" data-i="${i}">استرجاع</button></div>`).join(""):""}</div>`;
+      ${(p.snaps||[]).length?`<h3 style="margin-top:12px">البرامج المطبوعة (آخر ${p.snaps.length})</h3>`+p.snaps.map((x,i)=>`<div class="row" style="margin:5px 0"><span class="muted">${fmt(x.t)} · ${({diet:"تغذية",train:"تمرين",sups:"مكملات",book:"كتيب",paste:"لصق برنامج"})[x.kind]||x.kind} · ${esc(x.phase||"")} · ${x.weight} كجم</span><button class="sec" data-do="restore" data-i="${i}">استرجاع</button></div>`).join(""):""}</div>`;
 
     const exSel=(sel,path)=>allEx().some(e=>e.n===sel)?`<select data-p="${path}" style="flex:2">${exOpts(sel)}</select>`:`<input data-p="${path}" value="${esc(sel)}" style="flex:2">`;
     const train=`<div class="card no-print"><h3>نظام التمرين</h3><div class="grid"><label>القالب<select data-p="tsplit">${Object.entries(SPLITS).map(([k,v])=>`<option value="${k}" ${k===d.tsplit?"selected":""}>${v[0]}</option>`).join("")}</select></label></div>
@@ -712,15 +1012,17 @@ function playerView(p){
     const hist=(d.hist||[]).slice().reverse();
     const upd=`<div class="card"><h3>إضافة قياس جديد <span class="hs">New Update</span></h3><div class="grid"><label>الوزن (كجم)<input id="uw" type="number" step="0.1" value="${d.weight}"></label><label>نسبة الدهون %<input id="ub" type="number" step="0.1" value="${d.bf||""}"></label></div><label>ملاحظة<input id="un" placeholder="اختياري"></label><button data-do="addupd">حفظ التحديث</button></div>
      <div class="card"><h3>سجل التحديثات <span class="hs">Recent Visits</span></h3>${hist.length?`<table><tr><th>التاريخ</th><th>الوزن</th><th>التغيّر</th><th>دهون</th><th>ملاحظة</th></tr>${hist.map((x,i)=>{const pv=hist[i+1],df=pv?(x.w-pv.w):null;return `<tr><td>${fmt(x.t)}</td><td><b>${x.w}</b> كجم</td><td class="muted">${df===null?"—":(df>0?"+":"")+df.toFixed(1)}</td><td>${x.bf?x.bf+"%":"—"}</td><td class="muted">${esc(x.note||"")}</td></tr>`}).join("")}</table>`:'<div class="muted">لا توجد تحديثات محفوظة.</div>'}</div>`;
-    const TABS=["الحسابات","التغذية","التمرين","المكملات","كارديو وملاحظات","التحديثات"],PANES=[calcTab,nut,train,sups,notes,upd];
+    const ppPane=ppEditorHTML(p);
+    const TABS=["الحسابات","التغذية","التمرين","المكملات","كارديو وملاحظات","التحديثات","لصق البرنامج"],PANES=[calcTab,nut,train,sups,notes,upd,ppPane];
     app.innerHTML=`<div class="ph"><h1>Coach <span>Mohamed Kamal</span> — كوتش كيمو</h1><div>برنامج: ${esc(p.name)} · ${new Date().toLocaleDateString("ar-EG")}</div></div>
-     <div class="row no-print" style="margin-bottom:12px"><button class="sec" data-do="back">← رجوع</button><div><button data-do="pdf" data-v="diet">🍽 PDF التغذية</button> <button data-do="pdf" data-v="train">🏋️ PDF التمرين</button> <button data-do="pdf" data-v="book">📘 كتيب كامل</button> <button data-do="pdf" data-v="sups">💊 PDF المكملات</button> <button class="sec" data-do="pfile">⬇ ملف اللاعب</button> <button class="sec" data-do="delp">حذف اللاعب</button></div></div>
+     <div class="row no-print" style="margin-bottom:12px"><button class="sec" data-do="back">← رجوع</button><div><button data-do="pdf" data-v="diet">🍽 PDF التغذية</button> <button data-do="pdf" data-v="train">🏋️ PDF التمرين</button> <button data-do="pdf" data-v="book">📘 كتيب كامل</button> <button data-do="pdf" data-v="sups">💊 PDF المكملات</button> <button class="sec" data-do="pcopy">📤 نسخة للمساعد (مشفّرة)</button> <button class="sec" data-do="pfile">⬇ ملف اللاعب</button> <button class="sec" data-do="delp">حذف اللاعب</button></div></div>
      <div class="tabs no-print">${TABS.map((n,i)=>`<button class="${i===tab?"on":""}" data-do="tab" data-v="${i}">${n}</button>`).join("")}</div>
      ${PANES.map((h,i)=>`<div class="pane ${i===tab?"on":""}">${h}</div>`).join("")}${navHTML(tab===5?"updates":tab===1?"plans":"player")}`;
   };
 
   app.onchange=e=>{
     const el=e.target;
+    if(el.dataset.pp||el.dataset.ppadd){if(d.pp)ppChange(el,d);save();return render()}
     if(el.dataset.add){const v=el.value;if(!v)return;const D=el.dataset;
       if(D.add==="food"){const nf=allFoods().find(f=>f.n===v);d.plans[D.k][+D.i].items.push({n:v,g:nf&&nf.pc?nf.pc:100});}
       else if(D.add==="ex")d.days[+D.i].blocks[+D.b].items.push({n:v==="__free"?"نص جديد":v,sr:v==="__free"?"":"3 × 10"});
@@ -738,15 +1040,19 @@ function playerView(p){
       save();render();}
   };
   app.oninput=e=>{const el=e.target;if(el.dataset.live){d[el.dataset.live]=el.value;$("#"+el.dataset.mirror).textContent=el.value;save();}};
-  app.onclick=e=>{
+  app.onclick=async e=>{
     const b=e.target.closest("[data-do]");if(!b)return;const D=b.dataset,a=D.do,k=D.k,i=+D.i,j=+D.j;
+    if(a==="pppdf"){await ppMakePdf(p);return}
+    if(a.startsWith("pp")){ppAction(a,D,p,d);save();render();return}
     if(a==="back")return listView();
     if(a==="pdf")return previewView(p,D.v);
     if(a==="delp"){if(confirm("حذف اللاعب؟")){delete pend[p.id];clearTimeout(tmr[p.id]);delPlayerRaw(p.id);if(store.cur===p.id){store.cur=null;putMeta("cur",null)}store.players=store.players.filter(x=>x.id!==p.id);listView();}return;}
+    if(a==="pcopy"){if(!HAS_CR)return alert("التشفير مش متاح في المتصفح ده");const pw=prompt("اكتب كلمة سر للنسخة (ابعتها للمساعد في رسالة منفصلة)");if(!pw)return;if(pw.length<6)return alert("6 حروف على الأقل");
+      const c=clone(p);delete c.snaps;const o=await encJson({v:2,players:[c]},pw);const ok=await copyText(JSON.stringify(o));alert(ok?"✓ اتنسخت. ابعتها للمساعد، وابعتله كلمة السر منفصلة":"تعذر النسخ، جرّب تاني");return}
     if(a==="pfile"){const el=document.createElement("a");el.href=URL.createObjectURL(new Blob([JSON.stringify(p)],{type:"application/json"}));el.download="player-"+p.name+".json";el.click();return;}
     if(a==="restore"){const sn=(p.snaps||[])[+D.i];if(sn&&confirm("استرجاع هذا البرنامج يستبدل البرنامج الحالي، متأكد؟")){Object.assign(d,clone(sn.data));d.filled={F:1,H:1,M:1,L:1,Z:1};d.daysFilled=1;}}
     if(["loadsplit","addday","delday","delblock"].includes(a))d.daysFilled=1;
-    if(a==="tab")tab=+D.v;
+    if(a==="tab"){tab=+D.v;ppMsg=""}
     else if(a==="addupd"){const w=parseFloat($("#uw").value);if(!w){alert("اكتب الوزن");return}const bf=$("#ub").value;d.weight=w;if(bf!=="")d.bf=+bf;d.hist=d.hist||[];d.hist.push({t:Date.now(),w,bf:bf!==""?+bf:undefined,note:$("#un").value.trim()});if(d.hist.length>60)d.hist.shift();}
     else if(a==="goal")d.goal=D.v;
     else if(a==="smart"){const t=($("#smt").value||"").trim();d.raw=t;if(!t){smMsg="";return render()}const R=parseNotes(t),o=applyParsed(p,R);smMsg=o.length?"✓ تم توزيع: "+o.join(" · ")+(R.left.length?"<br>＋ "+R.left.length+" سطر اتحفظ في الملاحظات الخاصة":""):"ما قدرتش أتعرف على بيانات. اكتب بالشكل: الاسم: .. السن: .. الطول: .. الوزن: ..";d.raw="";updateIdx(p);}
@@ -898,9 +1204,9 @@ function buildPdf(pages){
   return new Blob(parts,{type:"application/pdf"});
 }
 const waNum=v=>{let x=String(v||"").replace(/[^\d]/g,"");if(x.startsWith("00"))x=x.slice(2);else if(x.startsWith("0")&&x.length===11)x="2"+x;return x};
-const KLBL={diet:"برنامج التغذية",train:"برنامج التمرين",sups:"بروتوكول المكملات",book:"الكتيب الكامل"};
+const KLBL={diet:"برنامج التغذية",train:"برنامج التمرين",sups:"بروتوكول المكملات",book:"الكتيب الكامل",pp:"البرنامج"};
 const canShareFiles=()=>{try{return !!(navigator.canShare&&navigator.canShare({files:[new File(["x"],"a.pdf",{type:"application/pdf"})]}))}catch(_){return false}};
-function plainText(p,kind){
+function plainText(p,kind){if(kind==="pp")return ppText(p);
   let lines=kind==="sups"?supLines(p):kind==="train"?trainLines(p):dietLines(p).out;
   if(kind==="book"&&p.d.supMode==="separate")lines=lines.concat([""],supLines(p));
   return lines.map(l=>/^━+$/.test(l)?"──────────":l).join("\n").replace(/\n{3,}/g,"\n\n").trim();
